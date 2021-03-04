@@ -18,7 +18,7 @@ Example of my workflow in response to the first practical activity. The purpose 
 
 <br>
 
-The HTML output can be viewed here: [](https://alycerussell.github.io/ClinicalBioinformatics_Module1_Week1_Practical)
+The HTML output can be viewed here: [HTML](https://alycerussell.github.io/ClinicalBioinformatics_Module1_Week1_Practical)
 
 <br>
 
