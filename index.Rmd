@@ -1,0 +1,523 @@
+---
+title: "SCH6245 Clinical Bioinformatics"
+subtitle: "Module 1: Reproducible Research Example"
+author: "Dr Alyce Russell <br> Postdoctoral Research Fellow <br> Centre for Precision Health, ECU <br> a.russell@ecu.edu.au <br> https://www.twitter.com/nerdrusty "
+date: "Created: 3 March 2021 <br> Last Updated: `r format(Sys.Date(), format = '%d %B %Y')`"
+output: 
+  html_document:
+    css: buttons.css
+    fig_caption: yes
+    highlight: tango
+    keep_md: yes
+    theme: lumen
+    toc: yes
+    toc_float:
+      collapsed: false
+    toc_depth: 2
+    self_contained: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+```{r, echo=FALSE}
+#Determine the output format of the document
+outputFormat = knitr::opts_knit$get("rmarkdown.pandoc.to")
+
+#Figure and Table Caption Numbering, for HTML do it manually
+capTabNo = 1; capFigNo = 1;
+
+#Function to add the Table Number
+capTab = function(x){
+  if(outputFormat == 'html'){
+    x = paste0("**", "Table ", capTabNo, ". ", "**", x)
+    capTabNo <<- capTabNo + 1
+  }; x
+}
+
+#Function to add the Figure Number
+capFig = function(x){
+  if(outputFormat == 'html'){
+    x = paste0("**", "Figure ",capFigNo,". ", "**", x)
+    capFigNo <<- capFigNo + 1
+  }; x
+}
+
+```
+
+<div style="margin-bottom:50px;">
+
+<style>
+ #TOC {
+  background: url("./images/Centre-for-Precision-Health.png");
+  background-size: contain;
+  padding-top: 100px !important;
+  background-repeat: no-repeat;
+}
+</style>
+
+</div>
+
+<style>
+  p.caption {
+    font-size: 1.2em;
+    }
+  caption {
+    font-size: 1.2em;
+    } 
+  body{
+    font-size: 12pt;
+    }
+</style>
+
+
+<script src="hideOutput.js"></script>   
+
+
+## Overview
+
+<br> 
+
+This is a walk-through of the first activity for the semester. I purposely gave you little direction to get you started on decision making required in bioinformatics. You may have chosen different examples, which is fine as you will also be doing different projects. Hopefully this will explain a few things that were confusing. 
+
+Make sure you have a go doing this yourself and submit your final output to "*Discussion Board > Week 1 Output*". Also, check each others content. Your peers may know how to do something more efficiently. 
+
+<br> 
+
+***
+
+## Load Dependencies
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(kableExtra)
+library(ggpubr)
+```
+
+## Data Preparation
+
+```{r}
+# first list the sheet names for your info
+excel_sheets("./data/surveys_data.xlsx")
+
+# load the data first
+survey_data <- read_excel("./data/surveys_data.xlsx", sheet = 1)
+
+# load in plot info
+plot_info <- read_excel("./data/surveys_data.xlsx", sheet = 2)
+
+# load in species info
+species_info <- read_excel("./data/surveys_data.xlsx", sheet = 3)
+```
+
+<br>
+
+It is good practice to always check your data structure first and make sure your variables are in the right format. Then you should clean variables and add value labels. Bioinformatics and statistics is about 80% data preparation and 20% analysis and visualisation. 
+
+<br>
+
+<div class="fold o">
+
+```{r}
+# check structure of the data - this function shows variable names (next to `$`), 
+# variable format, and the first few lines of code. 
+str(survey_data)
+
+# ok so first off I am going to recode sex as numeric.
+# to recode sex and set value labels, you can use something like below 
+# (though other options exist).
+survey_data$sex <- ifelse(survey_data$sex=="M", 0, 
+                          ifelse(survey_data$sex=="F", 1, NA))
+survey_data$sex <- factor(survey_data$sex,
+                          levels=c(0,1),
+                          labels=c("Male", "Female"))
+```
+
+</div>
+
+<br>
+
+Label plot_id in main dataset using the variables in your `plot_info` data. 
+
+<br>
+
+```{r}
+# explore the data structure to determine steps required
+str(plot_info)  
+head(plot_info)  #prints first few lines of data so you can see what the format is
+
+# label plot_id according to the plot_type info in thhe plot_info dataset
+survey_data$plot_id <- factor(survey_data$plot_id,          # this is the variable we want label
+                              levels=plot_info$plot_id,     # these are the levels of the factors
+                              labels=plot_info$plot_type)   # these are the value labels matching those levels
+```
+
+<br>
+
+Label `species_id` in main dataset using the variables in your `species_info` data.
+
+<br>
+
+<div class="fold o">
+
+```{r}
+# explore the data structure to determine steps required
+str(species_info)
+
+# next merge `genus` and `species` variables into one column.
+# NOTE: this last bit adds a space between genus and species
+species_info$species_lab <- paste(species_info$genus, species_info$species, " ") 
+
+# check the first 10 rows using this code
+species_info[1:10,]  # head(species_info) will give you the first 6 rows
+
+# there is lagging space present, which I want to remove
+species_info$species_lab <- trimws(species_info$species_lab, which = "right")
+species_info[1:10,]
+
+# label the species id values in survey_data -- same as above
+survey_data$species_id <- factor(survey_data$species_id, 
+                                 levels=species_info$species_id,
+                                 labels=species_info$species_lab)
+
+# add genus and taxa to your data too
+survey_data <- merge(survey_data, species_info[,c(2,4,5)], 
+                     by.x="species_id", by.y="species_lab")
+
+str(survey_data)
+head(survey_data)
+
+# remove labels with missing
+survey_data$species_id <- droplevels(survey_data$species_id)
+```
+
+</div>
+
+<br>
+
+We noticed some weirdness in the data on campus. This is common and the dataset was not clean. For the purpose of this exercise, let's remove any with missing `sex` or `weight`.
+
+<br>
+
+
+```{r}
+# new dataset without missing data for sex or weight
+survey_data$sexmiss <- ifelse(is.na(survey_data$sex), 1, 0)  # creating index number to indicate missing sex
+survey_data$weightmiss <- ifelse(is.na(survey_data$weight), 1, 0)
+survey_data$anymiss <- ifelse(survey_data$sexmiss==1 | survey_data$weightmiss==1, 1, 0)  # missing either
+
+table(survey_data$sexmiss, survey_data$anymiss)    # check all sexmiss are counted
+table(survey_data$weightmiss, survey_data$anymiss) # ditto for weightmiss
+table(survey_data$anymiss)  #2604 to be excluded
+
+survey_data2 <- survey_data[!survey_data$anymiss==1, ]    # new data excluding missing by indicator
+dim(survey_data)  # 34786    15  (read as row x column)
+dim(survey_data2) # 32182    15  (34786 - 2604 = 32182... confirm exclusion worked)
+```
+
+<div class="fold o">
+
+```{r}
+str(survey_data2)
+head(survey_data2)
+names(survey_data2)  #prints name and column number -- use to exclude unwanted cols
+survey_data2 <- survey_data2[, c(1:12)] 
+
+```
+
+</div>
+
+<br>
+
+Last thing I'll do is create a season variable from the date. Season can affect many things in the animal kingdom as well as in bioinformatics studies. 
+
+<br>
+
+>What are some examples you can think of??
+
+<br>
+
+```{r}
+# create season variable with a nested ifelse function -- this is intermediate level but USEFUL to know
+survey_data2$season <- ifelse(survey_data2$month==12 | survey_data2$month==1 | survey_data2$month==2, 0,  #if Dec to Feb, code '0', else.. 
+                              ifelse(survey_data2$month==3 | survey_data2$month==4 | survey_data2$month==5, 1, 
+                                     ifelse(survey_data2$month==6 | survey_data2$month==7 | survey_data2$month==8, 2, 
+                                            ifelse(survey_data2$month==9 | survey_data2$month==10 | survey_data2$month==11, 3, NA)))) 
+# check
+table(survey_data2$season)
+
+# label seasons variable
+survey_data2$season <- factor(survey_data2$season,
+                              levels=c(0,1,2,3), #telling it these are the levels
+                              labels=c("Summer", "Autumn", "Winter", "Spring"))
+table(survey_data2$season) # labels have worked
+
+```
+
+<br>
+
+***
+
+## Exploratory Data Analysis (EDA)
+
+<br>
+
+<div class="fold s">
+
+```{r}
+# counts
+summSeason <- survey_data2 %>%
+  group_by(season) %>%
+  count() %>%  #count by season
+  as.data.frame() #output as data.frame not tibble
+summSeason$p <- round(summSeason$n/nrow(survey_data2)*100,1)  #create percentages
+
+summSex <- survey_data2 %>%
+  select(season, sex) %>%
+  group_by(season) %>%
+  count(sex) %>%
+  as.data.frame()
+summSex$p <- c(round(summSex$n[1:2]/sum(summSex$n[1:2])*100,1),
+               round(summSex$n[3:4]/sum(summSex$n[3:4])*100,1),
+               round(summSex$n[5:6]/sum(summSex$n[5:6])*100,1),
+               round(summSex$n[7:8]/sum(summSex$n[7:8])*100,1))  #create percentages by columns
+
+# means
+summMeans <- survey_data2 %>%
+  select(season, hindfoot_length, weight) %>%
+  group_by(season) %>%
+  summarise(across(.cols = everything(), ~mean(., na.rm = TRUE))) %>%
+  as.data.frame()
+
+# sd
+summSD <- survey_data2 %>%
+  select(season, hindfoot_length, weight) %>%
+  group_by(season) %>%
+  summarise(across(.cols = everything(), ~sd(., na.rm = TRUE))) %>%
+  as.data.frame()
+
+# plot by season - do they differ over the year??
+summPlots <- survey_data2 %>%
+  select(season, plot_id) %>%
+  group_by(season) %>%
+  count(plot_id) %>%
+  as.data.frame()
+summPlots$p <- c(round(summPlots$n[1:5]/sum(summPlots$n[1:5])*100,1),
+                 round(summPlots$n[6:10]/sum(summPlots$n[6:10])*100,1),
+                 round(summPlots$n[11:15]/sum(summPlots$n[11:15])*100,1),
+                 round(summPlots$n[16:20]/sum(summPlots$n[16:20])*100,1))
+```
+
+<br>
+
+To create summary table using `kableExtra` and my output from `dplyr`, first I create a data frame that prints exactly how I would want it to look (i.e. vars in first column then subsequent columns are some condition).
+
+<br>
+
+
+```{r}
+t1 <- data.frame(vars =   c(paste0("**Overall Count** "," *n (%)*"), 
+                            paste0("**Sex** "," *n (%)*"), 
+                                   "*Female*", "*Male*", 
+                            paste0("**Hindfoot Length** ", "mm", " *mean (SD)*"),
+                            paste0("**Weight** ", "g", " *mean (SD)*"),
+                            paste0("**Plot Information** ", "*n (%)*"),
+                                  "*Spectab Exclusure*", "*Control*", "*Long-term Krat Exclosure*", 
+                                  "*Rodent Exclosure*", "*Short-term Krat Exclusure*"),
+                 
+                 summer = c(paste0(summSeason$n[1], " (", summSeason$p[1], "%)"),
+                            "",  # add space for sex title
+                            paste0(summSex$n[1:2], " (", summSex$p[1:2], "%)"),
+                            paste0(round(summMeans$hindfoot_length[1],2), " (", 
+                                   round(summSD$hindfoot_length[1], 2), ")"),
+                            paste0(round(summMeans$weight[1], 2), " (", 
+                                   round(summSD$weight[1], 2), ")"),
+                            "",  # space for Plot Info title
+                            paste0(summPlots$n[1:5], " (", summPlots$p[1:5], "%)")),
+                 
+                 autumn = c(paste0(summSeason$n[2], " (", summSeason$p[2], "%)"), 
+                            "",  
+                            paste0(summSex$n[3:4], " (", summSex$p[3:4], "%)"),
+                            paste0(round(summMeans$hindfoot_length[2],2), " (", 
+                                   round(summSD$hindfoot_length[2], 2), ")"),
+                            paste0(round(summMeans$weight[2], 2), " (", 
+                                   round(summSD$weight[2], 2), ")"),
+                            "",  
+                            paste0(summPlots$n[6:10], " (", summPlots$p[6:10], "%)")),
+                 
+                 
+                 winter = c(paste0(summSeason$n[3], " (", summSeason$p[3], "%)"), 
+                            "",  
+                            paste0(summSex$n[5:6], " (", summSex$p[5:6], "%)"),
+                            paste0(round(summMeans$hindfoot_length[3],2), " (", 
+                                   round(summSD$hindfoot_length[3], 2), ")"),
+                            paste0(round(summMeans$weight[3], 2), " (", 
+                                   round(summSD$weight[3], 2), ")"),
+                            "", 
+                            paste0(summPlots$n[11:15], " (", summPlots$p[11:15], "%)")),
+                 
+                 spring = c(paste0(summSeason$n[4], " (", summSeason$p[4], "%)"), 
+                            "",  
+                            paste0(summSex$n[7:8], " (", summSex$p[7:8], "%)"),
+                            paste0(round(summMeans$hindfoot_length[4],2), " (", 
+                                   round(summSD$hindfoot_length[4], 2), ")"),
+                            paste0(round(summMeans$weight[4], 2), " (", 
+                                   round(summSD$weight[4], 2), ")"),
+                            "", 
+                            paste0(summPlots$n[16:20], " (", summPlots$p[16:20], "%)")),
+                 
+                 stringsAsFactors = FALSE)
+```
+
+</div>
+
+<br>
+
+Here's what the dataframe looks like before formatting a table. 
+
+<br>
+
+```{r}
+t1
+```
+
+
+<br>
+
+You can create amazing tables using `kableExtra`. A good reference can be found [here](https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html). These tables are fully customisable, though we'll do a basic summary table.
+
+You can use my [previous workshop](https://rpubs.com/R-LadiesPerth/creating-tables-rmarkdown) as a reference. 
+
+<br>
+
+```{r}
+kable(t1,
+      caption = capTab("**Summary of study variables by season**"), # adds table caption
+      col.names = c("", "Summer", "Autumn", "Winter", "Spring"),   # no title to first column
+      align="lcccc", 
+      type="") %>%
+  column_spec(1, width_min="5cm", border_right = TRUE) %>%
+  column_spec(c(2,3,4,5), width_min="3cm") %>%
+  row_spec(0, bold=T, color="white", background="#666666") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  add_indent(c(3,4,8:12)) %>%  # indent rows for measures with levels
+  footnote(general = c("*% are within groups for all non-missing values*")) %>% # add footnote
+  add_header_above(c(" " = 1, "Season" = 4), bold=T, color="white", background="#666666", include_empty = T)
+```
+
+<br> 
+
+***
+
+## Data Visualisation
+
+<br>
+
+You can use my [previous workshop](https://rpubs.com/r-ladiesperth/datavisualisationbasics) and the free eBook [ggplot2: Elegant Graphics for Data Analysis](https://ggplot2-book.org/) as references to create some plots. Here are some examples below. 
+
+<br>
+
+<div class="fold s">
+
+```{r}
+# remove levels where species_id has 0 records
+survey_data2$species_id <- droplevels(survey_data2$species_id) 
+survey_data2$genus <- as.factor(survey_data2$genus)
+
+# number samples collected each year
+p1 <- survey_data2 %>%
+  select(year, genus) %>%
+  group_by(year) %>%
+  count(genus) %>%
+  ggplot( aes(x=year, y=n, colour=genus)) +
+  geom_line(size=1.2) +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 90)) +
+  xlab("Year") + ylab("Number of Samples Collected") 
+
+# weight vs length by plot_id colour=species_id
+p2 <- ggplot(survey_data2, aes(x=hindfoot_length, y=weight, colour=as.factor(genus))) +
+  geom_point(na.rm = TRUE, alpha=0.5) + theme_bw() +
+  xlab("Hindfoot Length (mm)") + ylab("Weight (g)") + 
+  facet_grid(~ plot_id) + 
+  scale_colour_discrete(name = "Genus") + theme(legend.position = "none")
+  
+# length by sex
+p3 <- ggplot(survey_data2, aes(x=hindfoot_length, fill=sex)) +
+  geom_histogram(aes(y = ..density..), colour="black", bins=50, alpha=0.5) + 
+  geom_density(size=1, alpha=0.4) + 
+  theme_bw() + facet_grid(sex ~ .) + theme(legend.position = "none") +
+  xlab("Hindfoot Length (mm)") + ylab("Density")
+
+p3a <- ggplot(survey_data2, aes(x=as.factor(genus), y=hindfoot_length, colour = as.factor(genus))) +
+  geom_boxplot(fill="white", weight=1.5) + 
+  geom_point(#fill="white", 
+             position="jitter", 
+             alpha=0.1) +
+  xlab("Genus") + ylab("Hindfoot Length (mm)") +
+  theme_bw() + 
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90)) +
+  coord_flip()
+
+p4 <- ggplot(survey_data2, aes(x=weight, fill=sex)) +
+  geom_histogram(aes(y = ..density..), colour="black", bins=50, alpha=0.5) + 
+  geom_density(size=1, alpha=0.4) + 
+  theme_bw() + facet_grid(sex ~ .) + theme(legend.position = "none") +
+  xlab("Weight (g)") + ylab("Density")
+
+p4a <- ggplot(survey_data2, aes(x=as.factor(genus), y=weight, colour = as.factor(genus))) +
+  geom_boxplot(fill="white", weight=1.5) + 
+  geom_point(#fill="white", 
+             position="jitter", 
+             alpha=0.1) +
+  xlab("Genus") + ylab("Weight (g)") +
+  theme_bw() + 
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90)) +
+  coord_flip()
+```
+
+<br>
+
+```{r, fig.align="center", fig.width=8, fig.height=8, fig.cap =capFig("**Visualisations of Genera. a)** Hindfoot Length vs Weight, **b)** Number of Samples Collected")}
+ggarrange(
+  p2, p1,
+  labels = c("a", "b"),
+  nrow = 2#, heights = c(1,1.5)
+)
+```
+
+<br>
+
+```{r, fig.align="center", fig.width=8, fig.height=5, fig.cap =capFig("**Distributions of Hindfoot Length. a)** By Sex, **b)** By Genus")}
+ggarrange(
+  p3, p3a,
+  labels = c("a", "b")
+)
+```
+
+<br>
+
+```{r, fig.align="center", fig.width=8, fig.height=5, fig.cap =capFig("**Distributions of Weight. a)** By Sex, **b)** By Genus")}
+ggarrange(
+  p4, p4a,
+  labels = c("a", "b")
+)
+```
+
+</div>
+
+<br>
+
+***
+
+```{r}
+sessionInfo()
+```
