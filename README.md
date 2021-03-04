@@ -38,4 +38,6 @@ There's also code in the repository that you may find interesting for your own a
 
 * buttons to hide source code, output, or both, specific for chunks (CSS -- see also the "hideOutput.js" script)
 
+* an animated GitHub link to this repository in the top righ hand corner of the HTML (to use this, you need to edit 'header.html' to include your GitHub link)
+
 
